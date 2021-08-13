@@ -472,6 +472,7 @@ void publishIOMsg(void)
   inputAN.data = value;
   inputAN.data_length = 9;
   inputAN_pub.publish(&inputAN);
+  
 }
 String getValue(String data, char separator, int index) {
   int found = 0;
