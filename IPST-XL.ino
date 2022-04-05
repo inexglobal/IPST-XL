@@ -84,6 +84,8 @@ unsigned long g_prev_command_time = 0;
 static uint32_t tTime[10];
 float voltages;
 float voltages_last;
+float ref_voltages = 7.5;
+
 String dataVoltage = "";
 String dataVoltage_last = "";
 
@@ -285,7 +287,12 @@ void setup()
   sprintf(imu_frame_id, "imu_link");
   sprintf(mag_frame_id, "imu_link");
 
-
+  float v = getPowerInVoltage();
+  if (v > 10) {
+    ref_voltages = 11.3;
+  } else {
+    ref_voltages = 7.5;
+  }
 }
 
 /*******************************************************************************
@@ -361,7 +368,7 @@ void loop()
 
   if ((t - tTime[4]) >= (1000 / LOWBAT_NOTIFY_RATE)) {
     voltages = getPowerInVoltage();
-    if (voltages <= 7.5) {
+    if (voltages <= ref_voltages) {
       tone(buzzer_pin, 1760, 500);
     } else {
       noTone(buzzer_pin);
@@ -472,7 +479,7 @@ void publishIOMsg(void)
   inputAN.data = value;
   inputAN.data_length = 9;
   inputAN_pub.publish(&inputAN);
-  
+
 }
 String getValue(String data, char separator, int index) {
   int found = 0;
@@ -627,162 +634,162 @@ void set_idMotor() {
         }
       }
     }
-        else if (cmd[0] == "setid")
+    else if (cmd[0] == "setid")
+    {
+      uint8_t id = cmd[1].toInt();
+      uint16_t model_number = 0;
+      uint16_t set_model = cmd[2].toInt();
+      if (cmd[1] == '\0')
+        id = 1;
+      if (cmd[2] == '\0')
+        set_model = 0;
+      result = dxl_wb.scan(get_id, &scan_cnt, 10);
+      if (result == false)
+      {
+        Serial.println(log);
+        Serial.println("Failed to scan");
+      }
+      else
+      {
+        Serial.print("Find ");
+        Serial.print(scan_cnt);
+        Serial.println(" Dynamixels");
+
+        for (int cnt = 0; cnt < scan_cnt; cnt++)
         {
-          uint8_t id = cmd[1].toInt();
-          uint16_t model_number = 0;
-          uint16_t set_model = cmd[2].toInt();
-          if (cmd[1] == '\0')
-            id = 1;
-          if (cmd[2] == '\0')
-            set_model = 0;
-          result = dxl_wb.scan(get_id, &scan_cnt, 10);
+          Serial.print("id : ");
+          Serial.print(get_id[cnt]);
+          Serial.print(" model name : ");
+          Serial.println(dxl_wb.getModelName(get_id[cnt]));
+        }
+
+        uint8_t id_s    = get_id[0];
+        result = dxl_wb.changeID(id_s, id, &log);
+        if (result == false)
+        {
+          Serial.println(log);
+          return;
+        }
+        else
+        {
+          Serial.println(log);
+        }
+        result = dxl_wb.ping(id, &model_number, &log);
+        if (result == false)
+        {
+          Serial.println(log);
+          Serial.println("Failed to ping");
+        }
+        else
+        {
+          Serial.println("Succeeded to ping");
+          Serial.print("id : ");
+          Serial.print(id);
+          Serial.print(" model_number : ");
+          Serial.println(model_number);
+        }
+
+        if (set_model == 1) {
+          result = dxl_wb.jointMode(id, 0, 0, &log);
           if (result == false)
           {
             Serial.println(log);
-            Serial.println("Failed to scan");
+            Serial.println("Failed to change joint mode");
           }
           else
           {
-            Serial.print("Find ");
-            Serial.print(scan_cnt);
-            Serial.println(" Dynamixels");
+            Serial.println("Succeed to change joint mode");
+            Serial.println("Dynamixel is moving...");
 
-            for (int cnt = 0; cnt < scan_cnt; cnt++)
+            for (int count = 0; count < 3; count++)
             {
-              Serial.print("id : ");
-              Serial.print(get_id[cnt]);
-              Serial.print(" model name : ");
-              Serial.println(dxl_wb.getModelName(get_id[cnt]));
-            }
+              dxl_wb.goalPosition(id, (int32_t)0);
+              delay(3000);
 
-            uint8_t id_s    = get_id[0];
-            result = dxl_wb.changeID(id_s, id, &log);
-            if (result == false)
-            {
-              Serial.println(log);
-              return;
-            }
-            else
-            {
-              Serial.println(log);
-            }
-            result = dxl_wb.ping(id, &model_number, &log);
-            if (result == false)
-            {
-              Serial.println(log);
-              Serial.println("Failed to ping");
-            }
-            else
-            {
-              Serial.println("Succeeded to ping");
-              Serial.print("id : ");
-              Serial.print(id);
-              Serial.print(" model_number : ");
-              Serial.println(model_number);
-            }
-
-            if (set_model == 1) {
-              result = dxl_wb.jointMode(id, 0, 0, &log);
-              if (result == false)
-              {
-                Serial.println(log);
-                Serial.println("Failed to change joint mode");
-              }
-              else
-              {
-                Serial.println("Succeed to change joint mode");
-                Serial.println("Dynamixel is moving...");
-
-                for (int count = 0; count < 3; count++)
-                {
-                  dxl_wb.goalPosition(id, (int32_t)0);
-                  delay(3000);
-
-                  dxl_wb.goalPosition(id, (int32_t)1023);
-                  delay(3000);
-                }
-              }
-            } else {
-              int32_t goal  = 300;
-              result = dxl_wb.wheelMode(id, 0, &log);
-              if (result == false)
-              {
-                Serial.println(log);
-                return;
-              }
-              else
-              {
-                Serial.println(log);
-              }
-
-              result = dxl_wb.goalVelocity(id, (int32_t)goal, &log);
-              if (result == false)
-              {
-                Serial.println(log);
-                return;
-              }
-              else
-              {
-                Serial.println(log);
-              }
+              dxl_wb.goalPosition(id, (int32_t)1023);
+              delay(3000);
             }
           }
-        }
-        else
-        {
-          Serial.println("Please check ID");
+        } else {
+          int32_t goal  = 300;
+          result = dxl_wb.wheelMode(id, 0, &log);
+          if (result == false)
+          {
+            Serial.println(log);
+            return;
+          }
+          else
+          {
+            Serial.println(log);
+          }
+
+          result = dxl_wb.goalVelocity(id, (int32_t)goal, &log);
+          if (result == false)
+          {
+            Serial.println(log);
+            return;
+          }
+          else
+          {
+            Serial.println(log);
+          }
         }
       }
     }
-
-    void split(String data, char separator, String * temp)
+    else
     {
-      int cnt = 0;
-      int get_index = 0;
-
-      String copy = data;
-
-      while (true)
-      {
-        get_index = copy.indexOf(separator);
-
-        if (-1 != get_index)
-        {
-          temp[cnt] = copy.substring(0, get_index);
-
-          copy = copy.substring(get_index + 1);
-        }
-        else
-        {
-          temp[cnt] = copy.substring(0, copy.length());
-          break;
-        }
-        ++cnt;
-      }
+      Serial.println("Please check ID");
     }
+  }
+}
 
-    bool isAvailableID(uint8_t id)
+void split(String data, char separator, String * temp)
+{
+  int cnt = 0;
+  int get_index = 0;
+
+  String copy = data;
+
+  while (true)
+  {
+    get_index = copy.indexOf(separator);
+
+    if (-1 != get_index)
     {
-      for (int dxl_cnt = 0; dxl_cnt < (scan_cnt + ping_cnt); dxl_cnt++)
-      {
-        if (get_id[dxl_cnt] == id)
-          return true;
-      }
+      temp[cnt] = copy.substring(0, get_index);
 
-      return false;
+      copy = copy.substring(get_index + 1);
     }
-
-    void printInst(void)
+    else
     {
-      Serial.print("-------------------------------------\n");
-      Serial.print("Set begin before scan or ping\n");
-      Serial.print("-------------------------------------\n");
-      Serial.print("help\n");
-      Serial.print("scan   (RANGE)\n");
-      Serial.print("setid     (ID) (Mode[0=wheelMode,1=JointMode])\n");
-      Serial.print("end\n");
-      Serial.print("-------------------------------------\n");
-      Serial.print("Press Enter Key\n");
-
+      temp[cnt] = copy.substring(0, copy.length());
+      break;
     }
+    ++cnt;
+  }
+}
+
+bool isAvailableID(uint8_t id)
+{
+  for (int dxl_cnt = 0; dxl_cnt < (scan_cnt + ping_cnt); dxl_cnt++)
+  {
+    if (get_id[dxl_cnt] == id)
+      return true;
+  }
+
+  return false;
+}
+
+void printInst(void)
+{
+  Serial.print("-------------------------------------\n");
+  Serial.print("Set begin before scan or ping\n");
+  Serial.print("-------------------------------------\n");
+  Serial.print("help\n");
+  Serial.print("scan   (RANGE)\n");
+  Serial.print("setid     (ID) (Mode[0=wheelMode,1=JointMode])\n");
+  Serial.print("end\n");
+  Serial.print("-------------------------------------\n");
+  Serial.print("Press Enter Key\n");
+
+}
